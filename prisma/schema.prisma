@@ -1,0 +1,109 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  TRIALING
+  PAST_DUE
+  CANCELED
+  UNPAID
+}
+
+enum PlanTier {
+  FREE
+  BASIC
+  PRO
+}
+
+model User {
+  id               String              @id @default(uuid())
+  email            String              @unique
+  name             String?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  
+  // Subscription info
+  stripeCustomerId String?             @unique
+  subscriptionId   String?             @unique
+  planTier         PlanTier            @default(FREE)
+  subStatus        SubscriptionStatus?
+  credits          Int                 @default(10) // Monthly AI image/video credits
+  
+  // Relations
+  socialAccounts   SocialAccount[]
+  mediaAssets      MediaAsset[]
+  scheduledPosts   ScheduledPost[]
+}
+
+model SocialAccount {
+  id                    String            @id @default(uuid())
+  userId                String
+  user                  User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  provider              String            // 'x', 'linkedin', 'instagram', 'youtube'
+  providerAccountId     String            // Platform's unique user ID
+  profileName           String?           // Username/display name
+  profileImageUrl       String?
+  
+  encryptedAccessToken  String            // Encrypted Access Token
+  encryptedRefreshToken String?           // Encrypted Refresh Token
+  tokenExpiresAt        DateTime?
+  
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+  scheduledPosts        ScheduledPost[]
+
+  @@unique([userId, provider, providerAccountId])
+}
+
+enum AssetType {
+  IMAGE
+  VIDEO
+}
+
+model MediaAsset {
+  id             String            @id @default(uuid())
+  userId         String
+  user           User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  type           AssetType
+  url            String            // Cloudinary / AWS S3 URL
+  prompt         String
+  aspectRatio    String            // '9:16', '1:1', '16:9'
+  metadata       Json?             // Model name, duration, style preset
+  createdAt      DateTime          @default(now())
+  
+  scheduledPosts ScheduledPost[]
+}
+
+enum PostStatus {
+  DRAFT
+  PENDING
+  POSTED
+  FAILED
+}
+
+model ScheduledPost {
+  id              String           @id @default(uuid())
+  userId          String
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  mediaAssetId    String
+  mediaAsset      MediaAsset       @relation(fields: [mediaAssetId], references: [id], onDelete: Cascade)
+  
+  socialAccountId String
+  socialAccount   SocialAccount    @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+  
+  caption         String?
+  scheduledTime   DateTime
+  status          PostStatus       @default(PENDING)
+  errorLog        String?
+  
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+}
